@@ -114,7 +114,7 @@ def train(train_dataset, test_dataset):
         model = classifier_model(train_dataset, test_dataset)
 
         #checkpoint
-        filepath="weights.best.hdf5"
+        filepath='weights.best.hdf5'
         checkpoint = keras.callbacks.ModelCheckpoint(filepath, monitor='val_acc', verbose=1, save_best_only=True, mode='max')
         callbacks_list = [checkpoint]
             
@@ -141,55 +141,59 @@ def train(train_dataset, test_dataset):
     
     # save weights, model architecture & optimizer to an HDF5 format file
     os.system('rm -rf saved_model')
-    os.system('mkdir saved_model')
+    os.mkdir('saved_model')
     model.save('saved_model/classification_model.h5')
+    
 
 
-def freeze_graph():
-    model  = keras.models.load_model('saved_model/classification_model.h5')
+def freeze_graph(model='', input_node):
+    model  = keras.models.load_model(model)
+    os.system('rm -rf frozen_models')
+    os.mkdir('frozen_models')
 
     # Convert Keras model to ConcreteFunction
     full_model = tf.function(lambda x: model(x))
     full_model = full_model.get_concrete_function(
-    tf.TensorSpec(model.inputs[0].shape, model.inputs[0].dtype, name="conv2d_input:0"))
+    tf.TensorSpec(model.inputs[0].shape, model.inputs[0].dtype, name=input_node))
     
     # Get frozen ConcreteFunction
     frozen_func = convert_variables_to_constants_v2(full_model)
     frozen_func.graph.as_graph_def()
     layers = [op.name for op in frozen_func.graph.get_operations()]
 
-    print("Frozen model layers: ")
+    print('**************Frozen model layers**************')
     for layer in layers:
         print(layer)
 
-    print("Frozen model inputs: ")
+    print('**************Frozen model inputs**************')
     print(frozen_func.inputs)
-    print("Frozen model outputs: ")
+    print('**************Frozen model outputs**************')
     print(frozen_func.outputs)
     
     # Save frozen graph from frozen ConcreteFunction to hard drive
     tf.io.write_graph(graph_or_graph_def=frozen_func.graph,
-                  logdir="./frozen_models",
-                  name="frozen_graph.pb",
+                  logdir='./frozen_models',
+                  name='frozen_graph.pb',
                   as_text=False)
     return
     
 
-def optimize_graph():
+def optimize_graph(input_nodes, output_nodes):
     inputGraph = tf.GraphDef()
-    with tf.gfile.Open('frozen_models/frozen_graph.pb', "rb") as f:
+    with tf.gfile.Open('frozen_models/frozen_graph.pb', 'rb') as f:
         data2read = f.read()
         inputGraph.ParseFromString(data2read)
   
     outputGraph = optimize_for_inference_lib.optimize_for_inference(
               inputGraph,
-              ["placeholder"], # an array of the input node(s)
-              ["sequential/dense_2/Sigmoid"], # an array of output nodes
+              input_nodes, # an array of the input node(s)
+              output_nodes, # an array of output nodes
               tf.int32.as_datatype_enum)
 
     # Save the optimized graph'test.pb'
-    f = tf.gfile.FastGFile('frozen_models/OptimizedGraph.pb', "w")
+    f = tf.gfile.FastGFile('frozen_models/OptimizedGraph.pb', 'w')
     f.write(outputGraph.SerializeToString()) 
+
 
 def wrap_frozen_graph(graph_def, inputs, outputs):
     def _imports_graph_def():
@@ -202,38 +206,34 @@ def wrap_frozen_graph(graph_def, inputs, outputs):
         tf.nest.map_structure(import_graph.as_graph_element, inputs),
         tf.nest.map_structure(import_graph.as_graph_element, outputs))
 
-def evaluate(test_dataset):
+
+def evaluate(model='/frozen_models/frozen_graph.pb', test_dataset, input_nodes, output_nodes):
     # Load frozen graph using TensorFlow 1.x functions
-    with tf.io.gfile.GFile("./frozen_models/frozen_graph.pb", "rb") as f:
+    with tf.io.gfile.GFile(model, "rb") as f:
         graph_def = tf.compat.v1.GraphDef()
         loaded = graph_def.ParseFromString(f.read())
 
     # Wrap frozen graph to ConcreteFunctions
     frozen_func = wrap_frozen_graph(graph_def=graph_def,
-                                    inputs=["placeholder"],
-                                    outputs=["sequential/dense_2/Sigmoid"])
-
-    print("Frozen model inputs: ")
-    print(frozen_func.inputs)
-    print("Frozen model outputs: ")
-    print(frozen_func.outputs)
+                                    inputs=input_nodes,
+                                    outputs=output_nodes)
 
     # Get predictions for test images
     frozen_graph_predictions = frozen_func(x=tf.constant(test_dataset))[0]
 
     # Print the prediction for the first image
-    print("Example TensorFlow frozen graph prediction reference:")
+    print('Example TensorFlow frozen graph prediction reference:')
     print(frozen_graph_predictions[0].numpy())
 
     
-def test():   
-    model  = keras.models.load_model('saved_model/classification_model.h5')
+def test(model, test_path):   
+    model  = keras.models.load_model(model)
     #inp = model.input
     #output = model.output
     #print(inp, output) 
-    image_list = os.listdir('data/TestImages/')
+    image_list = os.listdir(test_path)
     for img in image_list:
-    	path = 'data/TestImages/' + img
+    	path = test_path + img
     	img = image.load_img(path,target_size=(150,150))  
     	plt.imshow(img)
     	
@@ -243,18 +243,25 @@ def test():
     	val = int(val[0][0])
     	print('value = ', val)
     	if val == 1: 
-    		plt.xlabel("Open",fontsize=20) 
+    		plt.xlabel('Open',fontsize=20) 
     	elif val == 0: 
-    		plt.xlabel("Close",fontsize=20)
+    		plt.xlabel('Close',fontsize=20)
     	plt.show()
 
 def main():
-    train_dataset, test_dataset = preprocess()
+	ap = argparse.ArgumentParser()  
+  	ap.add_argument('-d', '--image_dir', type=str, default='data', help='Path to folder of images.')  
+  	ap.add_argument('-m', '--model',     type=str, default='saved_model/classification_model.h5', help='Path of the float model.')
+  	ap.add_argument('--input_nodes', type=str, default='', help='List of input nodes of the graph.')
+  	ap.add_argument('--output_nodes', type=str, default='', help='List of output nodes of the graph.')  
+  	args = ap.parse_args() 
+  	
+    train_dataset, test_dataset = preprocess(args.image_dir)
     train(train_dataset, test_dataset)   
-    #freeze_graph()
-    #optimize_graph()
-    #evaluate(test_dataset)
-    #test()    
+    #freeze_graph(args.model, args.input_node)
+    #optimize_graph(args.input_nodes, args.output_nodes)
+    #evaluate(args.model, args.image_dir, args.input_nodes, args.output_nodes)
+    #test(args.model, args.image_dir)    
     
         
 if __name__ == '__main__':

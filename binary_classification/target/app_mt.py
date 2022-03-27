@@ -11,7 +11,6 @@ import time
 import sys
 import argparse
 
-_divider = '-------------------------------'
 
 def preprocess_fn(image_path, fix_scale):
     image = cv2.imread(image_path)
@@ -103,7 +102,7 @@ def app(image_dir,threads,model):
     input_scale = 2**input_fixpos
 
     ''' preprocess images '''
-    print (_divider)
+    print ('-------------------------------')
     print('Pre-processing',runTotal,'images...')
     img = []
     for i in range(runTotal):
@@ -111,7 +110,7 @@ def app(image_dir,threads,model):
         img.append(preprocess_fn(path, input_scale))
 
     '''run threads '''
-    print (_divider)
+    print ('-------------------------------')
     print('Starting',threads,'threads...')
     threadAll = []
     start=0
@@ -134,7 +133,7 @@ def app(image_dir,threads,model):
     timetotal = time2 - time1
 
     fps = float(runTotal / timetotal)
-    print (_divider)
+    print ('-------------------------------')
     print("Throughput=%.2f fps, total frames = %.0f, time=%.4f seconds" %(fps, runTotal, timetotal))
 
 
@@ -151,7 +150,7 @@ def app(image_dir,threads,model):
             wrong += 1
     accuracy = correct/len(out_q)
     print('Correct:%d, Wrong:%d, Accuracy:%.4f' %(correct,wrong,accuracy))
-    print (_divider)
+    print ('-------------------------------')
     return
 
 
@@ -162,7 +161,7 @@ def main():
   ap.add_argument('-m', '--model',     type=str, default='binary_classification.xmodel', help='Path of xmodel.')
   args = ap.parse_args()  
   
-  print ('Command line options:')
+  print ('Options:')
   print (' --image_dir : ', args.image_dir)
   print (' --threads   : ', args.threads)
   print (' --model     : ', args.model)
