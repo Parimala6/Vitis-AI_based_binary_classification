@@ -1,0 +1,18 @@
+model {
+   name : "binary_classification"
+   kernel {
+     name: "binary_classification"
+     mean: 103.94
+     mean: 116.78
+     mean: 123.68
+     scale: 1
+     scale: 1
+     scale: 1
+   }
+   model_type : CLASSIFICATION
+   classification_param {
+      top_k : 5
+      test_accuracy : false
+      preprocess_type : VGG_PREPROCESS
+   }
+}

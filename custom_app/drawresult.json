@@ -1,0 +1,33 @@
+{
+  "xclbin-location":"/usr/lib/dpu.xclbin",
+  "ivas-library-repo": "/opt/xilinx/lib",
+  "element-mode":"inplace",
+  "kernels" :[
+    {
+      "library-name":"libivas_airender.so",
+      "config": {
+        "fps_interval" : 10,
+        "font_size" : 2,
+        "font" : 1,
+        "thickness" : 2,
+        "debug_level" : 0,
+        "label_color" : { "blue" : 255, "green" : 0, "red" : 0 },
+        "label_filter" : [ "class", "probability" ],
+        "classes" : [
+                {
+                "name" : "open",
+                "blue" : 0,
+                "green" : 255,
+                "red" : 0
+                },
+                {
+                "name" : "close",
+                "blue" : 0,
+                "green" : 0,
+                "red" : 255
+                }
+          ]
+          }
+     }
+     ]       
+}

@@ -1,19 +1,21 @@
 import warnings
 warnings.filterwarnings('ignore')
 import tensorflow as tf
-#tf.compat.v1.enable_eager_execution() #enable for freeze_graph 
+#tf.compat.v1.enable_eager_execution() #enable only for freeze_graph function
 import numpy as np
 from tensorflow import keras
 import os, random
-import cv2
-from PIL import image
+import argparse
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.preprocessing import image
 from tensorflow.python.tools import freeze_graph
 from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2
 from tensorflow.python.tools import optimize_for_inference_lib
+from progressbar import ProgressBar
+from tensorflow.python.platform import gfile
+#import tensorflow.contrib.decent_q
 #from tensorflow_model_optimization.quantization.keras import vitis_quantize
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 
 def preprocess(directory_path='data/mrlEyes_2018_01'):
@@ -64,8 +66,8 @@ def preprocess(directory_path='data/mrlEyes_2018_01'):
     train = ImageDataGenerator(rescale=1/255, fill_mode='reflect', shear_range=0.2, width_shift_range=0.2, height_shift_range=0.2)        
     test = ImageDataGenerator(rescale=1/255)
 
-    train_dataset = train.flow_from_directory("data/Train/", target_size=(150,150), batch_size = 32, class_mode = 'binary') #,color_mode='grayscale'
-    test_dataset = test.flow_from_directory("data/Test/", target_size=(150,150), batch_size = 32, class_mode = 'binary') #color_mode='grayscale'
+    train_dataset = train.flow_from_directory("data/Train/", target_size=(150,150), batch_size = 32, class_mode = 'binary', color_mode='grayscale')
+    test_dataset = test.flow_from_directory("data/Test/", target_size=(150,150), batch_size = 32, class_mode = 'binary', color_mode='grayscale')
     print(test_dataset.class_indices)
     
     return train_dataset, test_dataset
@@ -75,7 +77,7 @@ def classifier_model(train_dataset, test_dataset):
     model = keras.Sequential()
 
     # Convolutional layer and maxpool layer 1
-    model.add(keras.layers.Conv2D(32,(3,3),activation='relu',input_shape=(150,150,3)))
+    model.add(keras.layers.Conv2D(32,(3,3),activation='relu',input_shape=(150,150,1)))
     model.add(keras.layers.MaxPool2D(2,2))
 
     # Convolutional layer and maxpool layer 2
@@ -109,47 +111,28 @@ def classifier_model(train_dataset, test_dataset):
  
  
 def train(train_dataset, test_dataset):
+    model = classifier_model(train_dataset, test_dataset)
     
-    with tf.Graph().as_default():
-        model = classifier_model(train_dataset, test_dataset)
-
-        #checkpoint
-        filepath='weights.best.hdf5'
-        checkpoint = keras.callbacks.ModelCheckpoint(filepath, monitor='val_acc', verbose=1, save_best_only=True, mode='max')
-        callbacks_list = [checkpoint]
-            
-        model.compile(optimizer='adam',loss='binary_crossentropy',metrics=['accuracy'])
-
-        model.fit_generator(train_dataset, 
+    model.compile(optimizer='adam',loss='binary_crossentropy',metrics=['accuracy'])
+    model.fit_generator(train_dataset, 
                         steps_per_epoch = train_dataset.samples//train_dataset.batch_size, 
                         epochs = 10, 
                         validation_data = test_dataset, 
-                        validation_steps=test_dataset.samples//test_dataset.batch_size, 
-                        callbacks=callbacks_list, verbose=0)    
-        print(model.summary()) 
-            
-        scores = model.evaluate(test_dataset, batch_size=32)
-        print('Loss: %.3f' % scores[0])
-        print('Accuracy: %.3f' % scores[1])
+                        validation_steps=test_dataset.samples//test_dataset.batch_size)    
+    print(model.summary()) 
     
-        with tf.compat.v1.Session() as sess:            
-            init = tf.compat.v1.global_variables_initializer()
-            sess.run(init)
-            saver = tf.compat.v1.train.Saver()
-            saver.save(sess,'./tensorflowModel.ckpt')
-            tf.io.write_graph(sess.graph.as_graph_def(), '.', 'tensorflowModel.pbtxt', as_text=True)   
+    scores = model.evaluate(test_dataset, batch_size=32)
+    print('Loss: %.3f' % scores[0])
+    print('Accuracy: %.3f' % scores[1]) 
     
     # save weights, model architecture & optimizer to an HDF5 format file
     os.system('rm -rf saved_model')
     os.mkdir('saved_model')
     model.save('saved_model/classification_model.h5')
-    
 
 
-def freeze_graph(model='', input_node):
+def freeze_graph(model, input_node):
     model  = keras.models.load_model(model)
-    os.system('rm -rf frozen_models')
-    os.mkdir('frozen_models')
 
     # Convert Keras model to ConcreteFunction
     full_model = tf.function(lambda x: model(x))
@@ -161,26 +144,26 @@ def freeze_graph(model='', input_node):
     frozen_func.graph.as_graph_def()
     layers = [op.name for op in frozen_func.graph.get_operations()]
 
-    print('**************Frozen model layers**************')
+    print("Frozen model layers: ")
     for layer in layers:
         print(layer)
 
-    print('**************Frozen model inputs**************')
+    print("Frozen model inputs: ")
     print(frozen_func.inputs)
-    print('**************Frozen model outputs**************')
+    print("Frozen model outputs: ")
     print(frozen_func.outputs)
     
     # Save frozen graph from frozen ConcreteFunction to hard drive
     tf.io.write_graph(graph_or_graph_def=frozen_func.graph,
-                  logdir='./frozen_models',
-                  name='frozen_graph.pb',
+                  logdir="./saved_model",
+                  name="frozen_graph.pb",
                   as_text=False)
     return
     
 
 def optimize_graph(input_nodes, output_nodes):
     inputGraph = tf.GraphDef()
-    with tf.gfile.Open('frozen_models/frozen_graph.pb', 'rb') as f:
+    with tf.gfile.Open('frozen_models/frozen_graph.pb', "rb") as f:
         data2read = f.read()
         inputGraph.ParseFromString(data2read)
   
@@ -191,76 +174,80 @@ def optimize_graph(input_nodes, output_nodes):
               tf.int32.as_datatype_enum)
 
     # Save the optimized graph'test.pb'
-    f = tf.gfile.FastGFile('frozen_models/OptimizedGraph.pb', 'w')
+    f = tf.gfile.FastGFile('frozen_models/OptimizedGraph.pb', "w")
     f.write(outputGraph.SerializeToString()) 
 
 
-def wrap_frozen_graph(graph_def, inputs, outputs):
-    def _imports_graph_def():
-        tf.compat.v1.import_graph_def(graph_def, name="")
+def evaluate_graph(graph, batch_size, test_dataset, input_node, output_node):
+    input_graph_def = tf.Graph().as_graph_def()
+    input_graph_def.ParseFromString(tf.io.gfile.GFile(graph, "rb").read())
 
-    wrapped_import = tf.compat.v1.wrap_function(_imports_graph_def, [])
-    import_graph = wrapped_import.graph
+    tf.import_graph_def(input_graph_def,name = '')
 
-    return wrapped_import.prune(
-        tf.nest.map_structure(import_graph.as_graph_element, inputs),
-        tf.nest.map_structure(import_graph.as_graph_element, outputs))
+    # Get input placeholders & tensors
+    images_in = tf.compat.v1.get_default_graph().get_tensor_by_name(input_node)
+    labels = tf.compat.v1.placeholder(tf.int32,shape = [None,2])
 
+    # get output tensors
+    logits = tf.compat.v1.get_default_graph().get_tensor_by_name(output_node)
+    predicted_logit = tf.argmax(input=logits, axis=1, output_type=tf.int32)
+    ground_truth_label = tf.argmax(labels, 1, output_type=tf.int32)
 
-def evaluate(model='/frozen_models/frozen_graph.pb', test_dataset, input_nodes, output_nodes):
-    # Load frozen graph using TensorFlow 1.x functions
-    with tf.io.gfile.GFile(model, "rb") as f:
-        graph_def = tf.compat.v1.GraphDef()
-        loaded = graph_def.ParseFromString(f.read())
+    # Define the metric and update operations
+    tf_metric, tf_metric_update = tf.compat.v1.metrics.accuracy(labels=ground_truth_label,
+                                                                predictions=predicted_logit,
+                                                                name='acc')
 
-    # Wrap frozen graph to ConcreteFunctions
-    frozen_func = wrap_frozen_graph(graph_def=graph_def,
-                                    inputs=input_nodes,
-                                    outputs=output_nodes)
+    with tf.compat.v1.Session() as sess:
+        progress = ProgressBar()        
+        sess.run(tf.compat.v1.initializers.global_variables())
+        sess.run(tf.compat.v1.initializers.local_variables())
 
-    # Get predictions for test images
-    frozen_graph_predictions = frozen_func(x=tf.constant(test_dataset))[0]
-
-    # Print the prediction for the first image
-    print('Example TensorFlow frozen graph prediction reference:')
-    print(frozen_graph_predictions[0].numpy())
+        feed_dict={images_in: test_dataset} #, labels: y_batch}
+        acc = sess.run(tf_metric_update, feed_dict)
+        print ('Graph accuracy with validation dataset: {:1.4f}'.format(acc))
 
     
 def test(model, test_path):   
     model  = keras.models.load_model(model)
     #inp = model.input
     #output = model.output
-    #print(inp, output) 
-    image_list = os.listdir(test_path)
-    for img in image_list:
-    	path = test_path + img
-    	img = image.load_img(path,target_size=(150,150))  
-    	plt.imshow(img)
-    	
-    	Y = image.img_to_array(img)
-    	X = np.expand_dims(Y,axis=0)
-    	val = model.predict(X)
-    	val = int(val[0][0])
-    	print('value = ', val)
-    	if val == 1: 
-    		plt.xlabel('Open',fontsize=20) 
-    	elif val == 0: 
-    		plt.xlabel('Close',fontsize=20)
-    	plt.show()
+    #print(inp, output)
+    
+    filename = random.choice(os.listdir(test_path))
+    path = test_path + filename
+    
+    img = image.load_img(path,target_size=(150,150))    
+    plt.imshow(img)
+ 
+    Y = image.img_to_array(img)    
+    X = np.expand_dims(Y,axis=0)
+    val = model.predict(X)
+    val = int(val[0][0])
+    print('value = ', val)
+    if val == 1:        
+        plt.xlabel("Open",fontsize=30)        
+    
+    elif val == 0:        
+        plt.xlabel("Close",fontsize=30)
+    plt.show()
+
 
 def main():
-	ap = argparse.ArgumentParser()  
-  	ap.add_argument('-d', '--image_dir', type=str, default='data', help='Path to folder of images.')  
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--graph', type=str, default='./quantize_results/quantize_eval_model.pb', help='graph file (.pb) to be evaluated')
+    parser.add_argument('--batch_size', type=int, default=32, help='Evaluation batchsize, must be integer value') 
+    ap.add_argument('-d', '--image_dir', type=str, default='data', help='Path to folder of images.')  
   	ap.add_argument('-m', '--model',     type=str, default='saved_model/classification_model.h5', help='Path of the float model.')
   	ap.add_argument('--input_nodes', type=str, default='', help='List of input nodes of the graph.')
-  	ap.add_argument('--output_nodes', type=str, default='', help='List of output nodes of the graph.')  
-  	args = ap.parse_args() 
-  	
+  	ap.add_argument('--output_nodes', type=str, default='', help='List of output nodes of the graph.')   
+    args = parser.parse_args()
+    
     train_dataset, test_dataset = preprocess(args.image_dir)
     train(train_dataset, test_dataset)   
-    #freeze_graph(args.model, args.input_node)
+    #freeze_graph(args.model, args.input_nodes)
     #optimize_graph(args.input_nodes, args.output_nodes)
-    #evaluate(args.model, args.image_dir, args.input_nodes, args.output_nodes)
+    #evaluate_graph(args.graph, args.batch_size, test_dataset, args.input_node, args.output_node)
     #test(args.model, args.image_dir)    
     
         

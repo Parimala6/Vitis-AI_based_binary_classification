@@ -1,0 +1,16 @@
+{
+  "model-name": "binary_classification",
+  "num-labels": 2,
+  "labels" :[
+    {
+      "name": "open",
+      "label": 0,
+      "display_name" : "open"
+    },
+    {
+      "name": "close",
+      "label": 1,
+      "display_name" : "close"
+    }
+    ]
+}

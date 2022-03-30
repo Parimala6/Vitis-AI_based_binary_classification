@@ -1,0 +1,19 @@
+{
+  "xclbin-location":"/lib/firmware/xilinx/kv260-smartcam/kv260-smartcam.xclbin",
+  "ivas-library-repo": "/usr/lib/",
+  "element-mode":"inplace",
+  "kernels" :[
+    {
+      "library-name":"libivas_xdpuinfer.so",
+      "config": {
+        "model-name" : "binary_classification",
+        "model-class" : "CLASSIFICATION",
+        "model-path" : "/home/petalinux/custom_app",
+        "run_time_model" : false,
+        "need_preprocess" : false,
+        "performance_test" : false,
+        "debug_level" : 1
+      }
+    }
+  ]
+}
