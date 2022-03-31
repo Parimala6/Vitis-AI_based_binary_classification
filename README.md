@@ -1,3 +1,5 @@
-# KV260 based eye state detection using Vitis-AI
-## Vitis-AI version - 1.3.0
+# Eye state detection using Vitis-AI
+## Vitis-AI version - 1.4.0
+## Tested on KV260
 
+For the detailed guide on how to run the code refer to - https://www.hackster.io/Parimala6
