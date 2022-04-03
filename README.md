@@ -3,10 +3,10 @@
 ### Tested on KV260
 
 Binary classification model summary: <br/>
-<img src="https://github.com/Parimala6/Vitis-AI_based_binary_classification/blob/main/images/model.PNG" width="400" height="400">
+<img src="https://github.com/Parimala6/Vitis-AI_based_binary_classification/blob/main/images/model.jpg" width="400" height="400">
 
 Training and validation accuracy:
-<img src="https://github.com/Parimala6/Vitis-AI_based_binary_classification/blob/main/images/train_acc.PNG" width="800" height="300">
+<img src="https://github.com/Parimala6/Vitis-AI_based_binary_classification/blob/main/images/train_acc.jpg" width="800" height="300">
 
 #### Model performance on KV260 
 <table>
