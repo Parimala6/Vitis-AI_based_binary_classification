@@ -31,7 +31,7 @@ Training and validation accuracy:
     </tbody>
 </table>
 
-#### KV260 performance when running out model
+#### KV260 performance while running the model
 <table>
     <thead>
         <tr>
