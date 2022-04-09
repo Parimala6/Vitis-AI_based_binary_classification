@@ -1,7 +1,7 @@
 compile() {
     vai_c_tensorflow \
 	--frozen_pb ./quantize_results/quantize_eval_model.pb \
-	--arch /opt/vitis_ai/compiler/arch/DPUCZDX8G/KV260/arch.json \
+	--arch arch.json \
 	--output_dir ./output/ \
 	--net_name binary_classification \
 	--options "{'mode':'normal'}" 
